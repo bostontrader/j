@@ -3,72 +3,101 @@
 use ink_lang as ink;
 
 #[ink::contract]
-mod j {
+mod incrementer {
 
-    /// Defines the storage of your contract.
-    /// Add new fields to the below struct in order
-    /// to add new static storage fields to your contract.
     #[ink(storage)]
-    pub struct J {
-        /// Stores a single `bool` value on the storage.
-        value: bool,
+    pub struct Incrementer {
+        value: i32,
+        my_value: ink_storage::collections::HashMap<AccountId, i32>,
     }
 
-    impl J {
-        /// Constructor that initializes the `bool` value to the given `init_value`.
+    impl Incrementer {
         #[ink(constructor)]
-        pub fn new(init_value: bool) -> Self {
-            Self { value: init_value }
+        pub fn new(init_value: i32) -> Self {
+            // Contract Constructor
+            Self{ value: init_value, my_value: Default::default() }
         }
 
-        /// Constructor that initializes the `bool` value to `false`.
-        ///
-        /// Constructors can delegate to other constructors.
-        #[ink(constructor)]
         pub fn default() -> Self {
-            Self::new(Default::default())
+            Self {
+                value: 0,
+                my_value: Default::default()
+            }
         }
 
-        /// A message that can be called on instantiated contracts.
-        /// This one flips the value of the stored `bool` from `true`
-        /// to `false` and vice versa.
         #[ink(message)]
-        pub fn flip(&mut self) {
-            self.value = !self.value;
-        }
-
-        /// Simply returns the current value of our `bool`.
-        #[ink(message)]
-        pub fn get(&self) -> bool {
+        pub fn get(&self) -> i32 {
             self.value
         }
+
+        #[ink(message)]
+        pub fn inc(&mut self, by :i32) {
+            self.value += by
+        }
+
+        #[ink(message)]
+        pub fn get_mine(&self) -> i32 {
+            // ACTION: Get `my_value` using `my_value_or_zero` on `&self.env().caller()`
+            // ACTION: Return `my_value`
+            let caller = self.env().caller();
+            self.my_value_or_zero(&caller )
+        }
+
+        #[ink(message)]
+        pub fn inc_mine(&mut self, by: i32) {
+            // ACTION: Get the `caller` of this function.
+            let caller = self.env().caller();
+
+            // ACTION: Get `my_value` that belongs to `caller` by using `my_value_or_zero`.
+            let n = self.my_value_or_zero(&caller );
+
+            // ACTION: Insert the incremented `value` back into the mapping.
+            self.my_value
+                .entry(caller)
+                .and_modify(|old_value| *old_value += by)
+                .or_insert(by);
+        }
+
+        fn my_value_or_zero(&self, of: &AccountId) -> i32 {
+            // ACTION: `get` and return the value of `of` and `unwrap_or` return 0
+            let balance = self.my_value.get(of).unwrap_or(&0);
+            *balance
+        }
+
     }
 
-    /// Unit tests in Rust are normally defined within such a `#[cfg(test)]`
-    /// module and test functions are marked with a `#[test]` attribute.
-    /// The below code is technically just normal Rust code.
     #[cfg(test)]
     mod tests {
-        /// Imports all the definitions from the outer scope so we can use them here.
         use super::*;
-
-        /// Imports `ink_lang` so we can use `#[ink::test]`.
         use ink_lang as ink;
 
-        /// We test if the default constructor does its job.
         #[ink::test]
         fn default_works() {
-            let j = J::default();
-            assert_eq!(j.get(), false);
+            let contract = Incrementer::default();
+            assert_eq!(contract.get(), 0);
         }
 
-        /// We test a simple use case of our contract.
         #[ink::test]
         fn it_works() {
-            let mut j = J::new(false);
-            assert_eq!(j.get(), false);
-            j.flip();
-            assert_eq!(j.get(), true);
+            let mut contract = Incrementer::new(42);
+            assert_eq!(contract.get(), 42);
+            contract.inc(5);
+            assert_eq!(contract.get(), 47);
+            contract.inc(-50);
+            assert_eq!(contract.get(), -3);
         }
+
+        #[ink::test]
+        fn my_value_works() {
+            let mut contract = Incrementer::new(11);
+            assert_eq!(contract.get(), 11);
+            assert_eq!(contract.get_mine(), 0);
+            contract.inc_mine(5);
+            assert_eq!(contract.get_mine(), 5);
+            contract.inc_mine(10);
+            assert_eq!(contract.get_mine(), 15);
+        }
+
+
     }
 }
